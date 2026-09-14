@@ -227,11 +227,13 @@ export function NativeChatMessageList({
     itemCount: slots.length,
     isWorking,
     showTypingIndicator,
+    isVisible,
     hasMore,
     loadingEarlier,
     loadEarlier,
     alignToViewportTop: transcriptWindow.alignToViewportTop,
     scrollToEnd: transcriptWindow.scrollToEnd,
+    restoreScrollOffset: transcriptWindow.restoreScrollOffset,
     consumeProgrammaticScroll: transcriptWindow.consumeProgrammaticScroll,
     reconcileReaderScroll: transcriptWindow.reconcileReaderScroll
   })
