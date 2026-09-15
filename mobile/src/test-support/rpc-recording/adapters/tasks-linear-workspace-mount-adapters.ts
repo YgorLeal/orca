@@ -23,7 +23,8 @@ export function tasksLinearWorkspaceMountAdapters(
       const renderPicker = modules.load<
         typeof import('../../../tasks/mobile-tasks-filter-pickers')
       >('mobile/src/tasks/mobile-tasks-filter-pickers.tsx').renderMobileTasksLinearWorkspacePicker
-      let selectedWorkspaceId: string | null = 'workspace-a'
+      let selectedWorkspaceId: ConnectionPresentationModel['selectedLinearWorkspaceId'] =
+        'workspace-a'
       let teamCount = 2
       let error = ''
       let contextLoads = 0
@@ -37,16 +38,17 @@ export function tasksLinearWorkspaceMountAdapters(
           loadLinearContext: () => {
             contextLoads++
             effect('linear.context-reloaded', { contextLoads })
+            return Promise.resolve()
           },
           selectedLinearWorkspaceId: selectedWorkspaceId,
-          setError: (message: string) => {
-            error = message
+          setError: (next) => {
+            error = typeof next === 'function' ? next(error) : next
           },
-          setSelectedLinearTeamIds: (ids: ReadonlySet<string>) => {
-            teamCount = ids.size
+          setSelectedLinearTeamIds: (next) => {
+            teamCount = (typeof next === 'function' ? next(new Set()) : next).size
           },
-          setSelectedLinearWorkspaceId: (id: string) => {
-            selectedWorkspaceId = id
+          setSelectedLinearWorkspaceId: (next) => {
+            selectedWorkspaceId = typeof next === 'function' ? next(selectedWorkspaceId) : next
           },
           setShowLinearWorkspacePicker: () => {},
           showLinearWorkspacePicker: true,
