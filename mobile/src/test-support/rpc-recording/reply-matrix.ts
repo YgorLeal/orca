@@ -70,18 +70,19 @@ export function frameReplyPartitions(scripted: unknown, normal: unknown): ReplyP
 }
 
 function streamedReply(reply: unknown, scripted: unknown): Record<string, unknown> | null {
-  return isStreamed(scripted) && reply !== null && typeof reply === 'object' && isStreamable(reply)
-    ? { ...reply, streaming: true }
-    : null
+  const envelope = successEnvelope(reply)
+  return envelope && isStreamed(scripted) ? { ...envelope, streaming: true } : null
 }
 
 function isStreamed(reply: unknown): boolean {
-  return reply !== null && typeof reply === 'object' && isStreamable(reply) && 'streaming' in reply
+  return successEnvelope(reply)?.streaming === true
 }
 
-/** A success envelope: only one carries `streaming`, since a refusal has no result to stream. */
-function isStreamable(reply: object): boolean {
-  return 'ok' in reply && reply.ok === true
+/** A success envelope, spreadable: only one carries `streaming`, a refusal has no result to stream. */
+function successEnvelope(reply: unknown): Record<string, unknown> | null {
+  return reply !== null && typeof reply === 'object' && 'ok' in reply && reply.ok === true
+    ? { ...reply }
+    : null
 }
 
 /** One reply a base scenario scripts, as a site the matrix drives. */
