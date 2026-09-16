@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { extname, join, relative } from 'node:path'
+import { extname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
@@ -247,7 +247,21 @@ describe('owner boundaries', () => {
 })
 
 const mobileRoot = fileURLToPath(new URL('../..', import.meta.url))
-const OWNER_MODULE = 'generation-scoped-request-owner'
+const ownerModule = join(mobileRoot, 'src', 'transport', 'generation-scoped-request-owner')
+
+/** Whether a file imports the owner, resolved rather than pattern-matched on the specifier. */
+function importsOwner(path: string, source: string): boolean {
+  const parsed = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
+  return parsed.statements.some((statement) => {
+    const specifier = ts.isImportDeclaration(statement) ? statement.moduleSpecifier : undefined
+    return (
+      specifier !== undefined &&
+      ts.isStringLiteral(specifier) &&
+      specifier.text.startsWith('.') &&
+      resolve(path, '..', specifier.text) === ownerModule
+    )
+  })
+}
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -375,7 +389,7 @@ describe('loader write fence', () => {
     .filter((path) => ['.ts', '.tsx'].includes(extname(path)))
     .filter((path) => !/\.test\.tsx?$/.test(path))
     .map((path) => ({ path, source: readFileSync(path, 'utf8') }))
-    .filter(({ source }) => source.includes(`./${OWNER_MODULE}`))
+    .filter(({ path, source }) => importsOwner(path, source))
 
   it('recognizes a loader that writes outside itself and leaves an honest one alone', () => {
     const probe = join(mobileRoot, 'src', 'transport', 'probe.ts')
@@ -399,7 +413,9 @@ describe('loader write fence', () => {
   it('has every owner holder loading without writing external state', () => {
     // Absence proves nothing without presence: an empty offender list would otherwise pass on a day
     // the scan found no holder and no loader to look inside.
-    expect(holders.length).toBeGreaterThan(0)
+    expect(
+      holders.map(({ path }) => relative(mobileRoot, path).split(/[/\\]/).join('/'))
+    ).toContain('src/session/use-mobile-native-chat-file-search.ts')
     expect(
       holders.reduce((total, { path, source }) => total + loaders(path, source).length, 0)
     ).toBeGreaterThan(0)
