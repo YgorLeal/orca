@@ -18694,6 +18694,167 @@
           "checkpoint": "reconciled"
         }
       ]
+    },
+    {
+      "id": "live-worktree-name-stream",
+      "operation": "session.live-worktree-name",
+      "version": 1,
+      "family": "live-worktree-name",
+      "sites": ["mobile/src/session/use-live-worktree-name.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "subscribed"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-1"
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-1::/work/feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "worktreeId": "repo-1::/work/feature",
+                "displayName": "Feature Work"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "named"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#2",
+          "params": {
+            "worktree": "id:repo-1::/work/feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "worktreeId": "repo-1::/work/feature",
+                "displayName": "Feature Work Renamed"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "refreshed"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
+        },
+        {
+          "checkpoint": "unmounted"
+        }
+      ]
+    },
+    {
+      "id": "host-worktree-refresh-stream",
+      "operation": "worktree.host-refresh",
+      "version": 1,
+      "family": "host-worktree-refresh",
+      "sites": ["mobile/src/worktree/host-worktree-refresh.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "start",
+          "id": "start"
+        },
+        {
+          "checkpoint": "started"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-1"
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "checkpoint": "worktrees-changed"
+        },
+        {
+          "advance": 3000
+        },
+        {
+          "checkpoint": "polled"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "reposChanged"
+            }
+          }
+        },
+        {
+          "checkpoint": "repos-changed"
+        },
+        {
+          "action": "stop",
+          "id": "stop"
+        },
+        {
+          "checkpoint": "stopped"
+        }
+      ]
     }
   ]
 }
