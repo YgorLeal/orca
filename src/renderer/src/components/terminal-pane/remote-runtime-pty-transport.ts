@@ -687,22 +687,26 @@ export function createRemoteRuntimePtyTransport(
         continue
       }
       if (!hasHostSessionTerminalSurface(snapshot, hostTabId)) {
+        // Why: the host attesting it retired this surface outranks every inference below, including
+        // the one that reads an empty tab as a host still republishing.
+        if (
+          leafId &&
+          hasRetirementProofForSurface(snapshot.retiredTerminalSurfaces, {
+            parentTabId: hostTabId,
+            leafId
+          })
+        ) {
+          return false
+        }
         const siblingStillExists =
           getHostSessionTerminalSurfaces(snapshot, hostTabId, {
             matchRequestedLeaf: false
           }).length > 0
         if (siblingStillExists) {
           // Why: one sibling-only listing is not removal evidence — a split the host is still
-          // publishing looks exactly like one it retired. Retire on the host's explicit proof, or on
-          // a second listing whose request began after the first saw the leaf missing (#20917).
-          if (
-            (leafId &&
-              hasRetirementProofForSurface(snapshot.retiredTerminalSurfaces, {
-                parentTabId: hostTabId,
-                leafId
-              })) ||
-            siblingOnlyAbsenceSeen
-          ) {
+          // publishing looks exactly like one it retired. Absent the proof above, retire only on a
+          // second listing whose request began after the first saw the leaf missing (#20917).
+          if (siblingOnlyAbsenceSeen) {
             return false
           }
           siblingOnlyAbsenceSeen = true
