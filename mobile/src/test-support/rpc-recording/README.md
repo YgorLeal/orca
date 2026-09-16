@@ -12,9 +12,19 @@ JSX compiles through the automatic runtime, because product sources use it and n
 a classic `React.createElement` emit throws `React is not defined` on the first screen render.
 
 The transport reuses `createStableLogicalRpcClient`, `projectMobileRpcRequestParams`
-(through that client), `RpcClientRequestTracker`, and the delivery-unknown marker. Hook
-mounting follows `use-mobile-native-chat-file-search.test.ts`; physical session mounting
-follows `stable-logical-rpc-client.test.ts`. Neither test exported a reusable mount utility.
+(through that client), `RpcClientRequestTracker`, `RpcClientStreamRegistry`, and the
+delivery-unknown marker. Hook mounting follows `use-mobile-native-chat-file-search.test.ts`;
+physical session mounting follows `stable-logical-rpc-client.test.ts`. Neither test exported a
+reusable mount utility.
+
+A subscription is opened by the real registry, not by the runner: subscribe params, frame routing
+and the unsubscribe wire (`buildReadyStreamUnsubscribe`) are all product code, and the only thing
+the recorder adds is the wire id and the name it files the payload under. The registry is per
+physical session, the way a `DirectRpcClient` owns one, so a frame is routed by the session that
+published its subscribe rather than by whichever session is current — after a cutover those are
+different registries, and the retiring one is what holds a cancelled subscribe long enough to
+unsubscribe it once its id arrives. Whether the two registries are distinct objects is not
+otherwise observable through a server subscription, because stream ids are unique across both.
 
 ## Mounting a screen
 
@@ -67,6 +77,7 @@ file, and `scenarioSha256` pins it per golden like any other scenario field.
 {"action":"select","id":"reset-a","args":{"workspace":"A"}}
 {"complete":"old-inventory","params":{"worktree":"id:A"},"reply":{"ok":true,"result":{"files":[]}}}
 {"checkpoint":"stale-completed"}
+{"frame":"runtime.clientEvents.subscribe#1","params":null,"reply":{"ok":true,"streaming":true,"result":{"type":"ready","subscriptionId":"sub-1"}}}
 ```
 
 `{"$undefined":true}` in the input means explicit undefined, including an own property;
@@ -75,6 +86,16 @@ Concurrent requests of one method require a logical binding and asserted params;
 wire ids never identify completions. Timers only advance explicitly, and zero-time drains
 flush due timers, promise continuations, and React work after every step. Date, performance,
 Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic.
+
+A `frame` names the subscribe payload it arrives on — `<method>#<n>`, the same per-method
+occurrence a request is named by — and carries a whole host response, which the real registry
+routes. One step kind therefore covers `ready`, a data event, the host's `end` and a refusal, and
+`params` asserts the subscribe params on every one of them, the contract `complete` already holds.
+Ending a stream takes the two responses a host really sends: the `end` event as a streaming frame,
+then the unary reply the dispatcher sends once the handler returns, which is what closes the stream
+and which the registry reports to the listener as an error. A streaming frame arriving after that
+is accepted and observes nothing, because the opener path answers for an id it no longer holds; a
+non-streaming one names the scenario that has stopped matching.
 
 ### Recorded time
 
@@ -162,9 +183,13 @@ file rather than of a restatement of it; `golden-header-digest.test.ts` pins wha
 buy.
 
 Checkpoints contain ordered sender calls and serialized physical application payloads, action and
-request settlements, projected state, and ordered external effects. Each effect also carries `sent`,
-the number of requests sent when it was recorded: sender and effects are two independent lists, so
-without it a send reordered ahead of a device write moves neither list and no golden notices.
+request settlements, projected state, and ordered external effects. Each effect and each payload
+also carries `sent`, the number of requests sent when it was recorded: sender, payloads and effects
+are independent lists, so without it a send reordered ahead of a device write, or ahead of a
+subscribe, moves no list and no golden notices. A subscribe is the sharper case of the two, because
+it publishes synchronously while a request first waits for connected: swapping `client.subscribe`
+and the first `sendRequest` in `use-live-worktree-name.ts` leaves the payload order byte-identical
+and moves only `sent`, from 0 to 1.
 Scheduling the journal write in `codex-reset-attempt-journal.ts` on a timer instead of awaiting it
 moved none of the 520 goldens before `sent` existed and moves two now, `codex-reset-credit-consumed`
 and its reply matrix, where the write's `sent` goes from 0 to 1. What `sent` cannot see is a defer
@@ -232,8 +257,16 @@ through direct/relay frame validation. Caches
 are tested by follow-up requests; no private cache maps are inspected.
 
 Every family runs the eleven partitions in `reply-matrix.ts` at **every reply its base scenario
-scripts**, one golden per site, and nothing is crossed against consumed fields. The partitions are
-the reply shapes a host can send: a normal result, an absent result, `null`, an inner `{ok: false}`
+scripts**, one golden per site, and nothing is crossed against consumed fields. A frame is a reply
+too, so a subscription's `ready` and each event it carries are sites like any completion — named by
+payload and occurrence, because one subscribe carries many frames and the name alone repeats. Nine
+of the eleven partitions apply at a frame: the two transport rejections are the shapes a _request
+promise_ fails with, and a subscription holds no promise for them to fail. The success shapes keep
+the scripted frame's `streaming` flag, since that flag is what routes a response to the open stream
+rather than to a retired request id — without it `normal` would be a different shape from the frame
+it replays, and no longer a control. Until frames were sites, `reply-matrix.ts` read only
+`'complete' in step`, so a frame was never varied and a family that only subscribes threw
+`No scripted reply to drive a matrix over`. The partitions are the reply shapes a host can send: a normal result, an absent result, `null`, an inner `{ok: false}`
 envelope with a string or object error, an inner envelope missing `ok`, an outer refusal with and
 without a message, `method_not_found`, and a transport rejection with and without a message. Shapes
 that were recorded before and are gone were unreachable: `successResponse` always sets `result`, so
@@ -341,8 +374,16 @@ the same operation must still survive it. A probe that stops being load-bearing 
 lingering.
 
 What is still not covered: what the count-based raw-port inventory covers instead (which files
-reach `sendRequest`, and how often), native storage, transport skew, the `subscribe`/
-`sendUnsubscribe` ports, and the two mutations under _Known-open holes_ below. Four of the nine
+reach `sendRequest`, and how often), native storage, transport skew, and the two mutations under
+_Known-open holes_ below. The `subscribe` / `sendUnsubscribe` ports are covered as of the two
+client-event families, with three bounds on that. Blur is unrecorded: `useFocusEffect` is
+substituted as `useEffect`, so a route's focus cleanup is recorded at unmount and an unsubscribe
+only a blur would reach is not — driving focus needs a substitute, and no recording reads one yet.
+The terminal stream and the browser screencast are unrecorded for a different reason: the frame
+plumbing covers them, but their consumers write to a webview terminal ref this runner has no
+substitute for. And `accounts.subscribe` in `use-mobile-home-host-connections.ts` is unrecorded
+because its snapshot decoder is re-exported through a React Native screen module the loader cannot
+reach, which is the same wall the accounts read has always been behind. Four of the nine
 probes pin behaviour with no demonstrated mutation — the two mixed reject/refusal new-tab orders
 and the home-providers and resume-metadata refresh refusals; they are frozen observations, not
 proven defect detectors. `settings.resume-metadata` projects `{}` as its state, so its probe
@@ -374,6 +415,13 @@ ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording
 ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 \
   pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record
 ```
+
+A call site that subscribes runs the same recipe, with one thing to check before step 2. The
+subscribe payload is named `<method>#<n>` by per-method occurrence, and every `frame` step in the
+scenario names it — so a migration that moves the subscribe past another send of the same method
+renames it and the scenario no longer resolves. That is a loud failure, not a silent one
+(`Missing subscription payload`), but it is the first thing to read when a subscription scenario
+stops matching.
 
 A re-record is a claim about behaviour. State the cause in the commit; every golden the refresh
 moves should have one.

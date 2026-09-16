@@ -49,16 +49,74 @@ export function replyPartitions(normal: unknown): ReplyPartition[] {
 }
 
 /**
- * Every reply the base scenario scripts, as a site the matrix drives.
+ * The partitions that apply at a frame: nine of the eleven.
+ *
+ * A frame is a whole host response handed to the real stream registry, and the two transport
+ * rejections are the shapes a *request promise* fails with — a subscription holds no promise, so
+ * there is nothing at a frame for them to reject. Everything else a host can put on a stream id is
+ * here, including the unary envelopes: the dispatcher sends exactly those once a streaming handler
+ * returns, and each drives a real branch of the registry rather than a shape invented for symmetry.
+ *
+ * `streaming` is carried over from the scripted frame, because that flag is what routes a response
+ * to the open stream rather than to a retired request id. Dropping it would leave `normal` a
+ * different shape from the frame it replays, and a success control that is not one.
+ */
+export function frameReplyPartitions(scripted: unknown, normal: unknown): ReplyPartition[] {
+  return replyPartitions(normal).flatMap((partition) =>
+    'reject' in partition
+      ? []
+      : [{ ...partition, reply: streamedReply(partition.reply, scripted) ?? partition.reply }]
+  )
+}
+
+function streamedReply(reply: unknown, scripted: unknown): Record<string, unknown> | null {
+  return isStreamed(scripted) && reply !== null && typeof reply === 'object' && isStreamable(reply)
+    ? { ...reply, streaming: true }
+    : null
+}
+
+function isStreamed(reply: unknown): boolean {
+  return reply !== null && typeof reply === 'object' && isStreamable(reply) && 'streaming' in reply
+}
+
+/** A success envelope: only one carries `streaming`, since a refusal has no result to stream. */
+function isStreamable(reply: object): boolean {
+  return 'ok' in reply && reply.ok === true
+}
+
+/** One reply a base scenario scripts, as a site the matrix drives. */
+export type MatrixSite = { id: string; index: number; reply: unknown }
+
+/**
+ * Every reply the base scenario scripts, in order.
  *
  * Why all of them and not one: picking the request per family is what let ten families fall out of
  * the matrix without saying so, and there is no property of a scenario that identifies the "real"
  * request — the settings families answer prerequisites before their own read, the chains answer
- * their own steps in order. Driving every completion needs no such judgement and needs no edit when
- * a domain is added. A family that scripts no reply at all cannot be matrixed and throws.
+ * their own steps in order. Driving every reply needs no such judgement and needs no edit when a
+ * domain is added. A family that scripts no reply at all cannot be matrixed and throws.
+ *
+ * A completion is named by its request. A frame is named by the subscribe payload it arrives on
+ * *and its occurrence*, because one subscription carries many frames — `ready`, then events, then
+ * `end` — so the payload name alone repeats and would make the divergence ambiguous.
  */
+export function matrixSites(base: RecordingScenario): MatrixSite[] {
+  const frames = new Map<string, number>()
+  return base.steps.flatMap((step, index) => {
+    if ('complete' in step) {
+      return [{ id: step.complete, index, reply: step.reply }]
+    }
+    if ('frame' in step) {
+      const occurrence = (frames.get(step.frame) ?? 0) + 1
+      frames.set(step.frame, occurrence)
+      return [{ id: `${step.frame}@${occurrence}`, index, reply: step.reply }]
+    }
+    return []
+  })
+}
+
 export function replyMatrixSites(base: RecordingScenario): string[] {
-  const sites = base.steps.flatMap((step) => ('complete' in step ? [step.complete] : []))
+  const sites = matrixSites(base).map((site) => site.id)
   if (!sites.length) {
     throw new Error(`No scripted reply to drive a matrix over: ${base.id}`)
   }
@@ -72,7 +130,7 @@ export function replyMatrixSites(base: RecordingScenario): string[] {
 
 /** Golden id for one family's matrix at one site, inside the charset `writeGolden` accepts. */
 export function replyMatrixGoldenId(family: string, request: string): string {
-  return `matrix-${family}-${request}`.toLowerCase().replaceAll('#', '-')
+  return `matrix-${family}-${request}`.toLowerCase().replaceAll('#', '-').replaceAll('@', '-')
 }
 
 export function driveReplyMatrix(
@@ -80,34 +138,38 @@ export function driveReplyMatrix(
   request: string,
   normal: unknown
 ): RecordingScenario[] {
-  const sites = base.steps.flatMap((step, index) =>
-    'complete' in step && step.complete === request ? [index] : []
-  )
+  const sites = matrixSites(base).filter((site) => site.id === request)
   if (sites.length !== 1) {
-    throw new Error(`Matrix requires exactly one completion: ${request}`)
+    throw new Error(`Matrix requires exactly one reply at: ${request}`)
   }
-  const divergence = sites[0]!
+  const { index: divergence, reply: scripted } = sites[0]!
+  const framed = 'frame' in base.steps[divergence]!
+  const partitions = framed ? frameReplyPartitions(scripted, normal) : replyPartitions(normal)
   return hoistPreludeCheckpoints(
     base,
-    replyPartitions(normal).map((partition) => ({
+    partitions.map((partition) => ({
       divergence,
       scenario: {
         ...base,
         id: `${base.id}.${partition.id}`,
         steps: base.steps.map((step, index): ScenarioStep =>
-          index === divergence && 'complete' in step
-            ? {
-                complete: request,
-                params: step.params,
-                ...('reject' in partition
-                  ? { reject: partition.reject }
-                  : { reply: partition.reply })
-              }
-            : index > divergence && ('complete' in step || 'bind' in step)
-              ? // The diverged reply may have ended the chain, so downstream replies are answered
-                // only if the operation asked for them. The sender list records which it did.
+          index !== divergence
+            ? index > divergence && ('complete' in step || 'bind' in step || 'frame' in step)
+              ? // The diverged reply may have ended the chain or closed the stream, so downstream
+                // replies are answered only if the operation asked. The sender list records which.
                 { ...step, optional: true }
               : step
+            : 'frame' in step
+              ? { frame: step.frame, params: step.params, reply: partition.reply }
+              : 'complete' in step
+                ? {
+                    complete: step.complete,
+                    params: step.params,
+                    ...('reject' in partition
+                      ? { reject: partition.reject }
+                      : { reply: partition.reply })
+                  }
+                : step
         )
       }
     }))

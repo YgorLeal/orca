@@ -10,12 +10,18 @@ export type Rejection = {
 }
 /**
  * `optional` belongs to generated steps only: a matrix variant answers one request differently, so
- * the requests scripted after it may never be sent. Skipping one that was not sent records what the
- * operation actually did; a scripted step the manifest declares is never optional.
+ * the requests scripted after it may never be sent, and a diverged frame can close the stream the
+ * frames after it were written for. Skipping one the operation never asked for records what it
+ * actually did; a scripted step the manifest declares is never optional.
+ *
+ * `frame` names the subscribe payload it is delivered on and carries a whole host response, which
+ * the real stream registry routes — `ready`, a data event, `end` and a refusal are all one kind.
+ * `params` asserts the subscribe params, the same contract `complete` holds for a request.
  */
 export type ScenarioStep =
   | { action: string; id: string; args?: Record<string, unknown> }
   | { complete: string; params: unknown; reply?: unknown; reject?: Rejection; optional?: true }
+  | { frame: string; params: unknown; reply: unknown; optional?: true }
   | { bind: string; request: string; params: unknown; optional?: true }
   | { advance: number }
   | { checkpoint: string }
