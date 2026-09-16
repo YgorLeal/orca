@@ -30,7 +30,7 @@ const mutants: Record<string, Mutation> = {
   'settings-workspace-submit-fulfilled': 'workspace-submit-envelope',
   'settings-task-workspace-fulfilled': 'task-workspace-envelope',
   'native-chat-write-delivery-unknown': 'native-chat-send-delivery-unknown',
-  'terminal-input-send-accepted': 'terminal-send-refusal-restores-draft',
+  'terminal-input-send-refused': 'terminal-send-refusal-restores-draft',
   'terminal-worktree-connection-resolved': 'worktree-connection-first-repo'
 }
 /**
