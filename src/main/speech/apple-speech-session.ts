@@ -46,9 +46,15 @@ export class AppleSpeechSession {
     // Why all three: spawnProcess hands back raw streams whose 'error' events
     // the caller owns, and an unhandled one is an uncaught exception that takes
     // the main process down mid-dictation.
+    //
+    // stdin is expected to break when the helper exits first; a broken stdout
+    // instead means transcripts stop arriving, so it ends the dictation.
     child.stdin.on('error', () => {})
-    child.stdout.on('error', () => {})
-    child.stderr.on('error', () => {})
+    const failOnStreamError = (): void => {
+      child.kill()
+    }
+    child.stdout.on('error', failOnStreamError)
+    child.stderr.on('error', failOnStreamError)
     child.stderr.resume()
 
     let ready = false

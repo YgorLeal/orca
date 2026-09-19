@@ -59,10 +59,16 @@ export function installAppleSpeechAssets(onProgress: (progress: number) => void)
   })
   child.stdout.setEncoding('utf8')
   child.stdout.on('data', (chunk: string) => reader.push(chunk))
-  // The caller owns raw stream errors; unhandled, they crash the main process.
-  child.stdin.on('error', () => {})
-  child.stdout.on('error', () => {})
-  child.stderr.on('error', () => {})
+  // Why kill on a stream error: the caller owns these events, and an install
+  // has no deadline. A broken pipe leaves us blind to the helper's `installed`
+  // line, so the row would sit at "downloading" until the user cancels.
+  const failOnStreamError = (error: Error): void => {
+    failure ??= `Apple Speech language install lost the helper: ${error.message}`
+    child.kill()
+  }
+  child.stdin.on('error', failOnStreamError)
+  child.stdout.on('error', failOnStreamError)
+  child.stderr.on('error', failOnStreamError)
   child.stderr.resume()
 
   const completed = new Promise<void>((resolve, reject) => {

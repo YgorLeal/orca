@@ -75,6 +75,19 @@ describe('installAppleSpeechAssets', () => {
     expect(onProgress).toHaveBeenCalledWith(0.5)
   })
 
+  it('gives up when the helper pipe breaks, instead of installing forever', async () => {
+    const helper = createFakeHelper()
+    spawnProcess.mockReturnValue(helper)
+
+    const install = installAppleSpeechAssets(vi.fn())
+    helper.stdout.emit('error', new Error('EPIPE'))
+    await new Promise((resolve) => setImmediate(resolve))
+    helper.emit('close')
+
+    await expect(install.completed).rejects.toThrow('lost the helper')
+    expect(helper.kill).toHaveBeenCalled()
+  })
+
   it('surfaces the helper error when the install never completes', async () => {
     const helper = createFakeHelper()
     spawnProcess.mockReturnValue(helper)

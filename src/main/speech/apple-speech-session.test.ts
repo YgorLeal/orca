@@ -136,6 +136,19 @@ describe('AppleSpeechSession', () => {
     expect(errors).toHaveLength(1)
   })
 
+  it('ends the dictation when transcripts stop flowing over a broken pipe', async () => {
+    const { emit } = await startSession()
+
+    helper.stdout.emit('error', new Error('EIO'))
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(helper.kill).toHaveBeenCalled()
+    expect(emit).toHaveBeenCalledWith({
+      type: 'error',
+      error: 'Apple Speech stopped unexpectedly.'
+    })
+  })
+
   it('stops accepting audio once the helper is gone', async () => {
     const { session } = await startSession()
     helper.exitCode = 0
