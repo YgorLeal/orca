@@ -59,6 +59,10 @@ export function installAppleSpeechAssets(onProgress: (progress: number) => void)
   })
   child.stdout.setEncoding('utf8')
   child.stdout.on('data', (chunk: string) => reader.push(chunk))
+  // The caller owns raw stream errors; unhandled, they crash the main process.
+  child.stdin.on('error', () => {})
+  child.stdout.on('error', () => {})
+  child.stderr.on('error', () => {})
   child.stderr.resume()
 
   const completed = new Promise<void>((resolve, reject) => {

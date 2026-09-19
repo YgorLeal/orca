@@ -32,6 +32,23 @@ afterAll(() => {
   }
 })
 
+/** The locale the helper picked, which is the one it will transcribe in. */
+async function readHelperLocale(): Promise<string> {
+  const result = await runProcess({ program: HELPER_PATH, args: ['status'], timeoutMs: 15_000 })
+  for (const line of result.stdout.split('\n')) {
+    try {
+      const event: unknown = JSON.parse(line)
+      const locale = event && typeof event === 'object' ? Reflect.get(event, 'locale') : null
+      if (typeof locale === 'string') {
+        return locale
+      }
+    } catch {
+      continue
+    }
+  }
+  return ''
+}
+
 /** Synthesizes the phrase with `say` and returns it as the mono float32 a mic would deliver. */
 async function speakToFloat32(phrase: string): Promise<Float32Array> {
   const dir = mkdtempSync(join(tmpdir(), 'orca-apple-speech-contract-'))
@@ -68,7 +85,13 @@ describeWithHelper('orca-speech-transcriber', () => {
 
   it('transcribes real speech into partial and final segments', async () => {
     const { readAppleSpeechAssetStatus } = await import('./apple-speech-assets')
+    // Why both gates: the helper transcribes in the Mac's own dictation
+    // language, and `say` speaks in its own default voice, so an English
+    // phrase is only a fair assertion on an English Mac.
     if ((await readAppleSpeechAssetStatus()) !== 'installed') {
+      return
+    }
+    if (!(await readHelperLocale()).toLowerCase().startsWith('en')) {
       return
     }
     const { AppleSpeechSession } = await import('./apple-speech-session')
