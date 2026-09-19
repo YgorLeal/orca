@@ -232,6 +232,13 @@ final class PcmStdinPump: @unchecked Sendable {
       return source
     }
     if status == .error || output.frameLength == 0 {
+      if let conversionError {
+        // Why stderr, not an error event: one unusable slice must not end a
+        // dictation the way a reported error would.
+        FileHandle.standardError.write(
+          Data("orca-speech-transcriber: audio conversion failed: \(conversionError)\n".utf8)
+        )
+      }
       return nil
     }
     return output
