@@ -275,10 +275,15 @@ func runTranscribe() async {
     do {
       for try await result in transcriber.results {
         let text = String(result.text.characters)
-        if text.isEmpty {
-          continue
+        // An empty volatile result retracts the live preview, so it is worth
+        // sending; an empty final segment carries nothing.
+        if result.isFinal {
+          if !text.isEmpty {
+            emit(["type": "final", "text": text])
+          }
+        } else {
+          emit(["type": "partial", "text": text])
         }
-        emit(["type": result.isFinal ? "final" : "partial", "text": text])
       }
     } catch {
       emitError("transcription_failed", error.localizedDescription)

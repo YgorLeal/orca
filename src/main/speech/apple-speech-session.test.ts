@@ -102,6 +102,40 @@ describe('AppleSpeechSession', () => {
     await expect(finished).resolves.toBe('')
   })
 
+  it('reports an exit the user did not ask for, so the UI leaves listening', async () => {
+    const { emit } = await startSession()
+
+    helper.exitCode = 1
+    helper.emit('close')
+
+    expect(emit).toHaveBeenCalledWith({
+      type: 'error',
+      error: 'Apple Speech stopped unexpectedly.'
+    })
+  })
+
+  it('stays quiet when the exit is the one finish asked for', async () => {
+    const { session, emit } = await startSession()
+    const finished = session.finish()
+    helper.exitCode = 0
+    helper.emit('close')
+    await finished
+
+    expect(emit).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }))
+  })
+
+  it('does not double-report a failure the helper already explained', async () => {
+    const { emit } = await startSession()
+
+    helper.stdout.write('{"type":"error","error":"transcription_failed","detail":"boom"}\n')
+    await new Promise((resolve) => setImmediate(resolve))
+    helper.exitCode = 1
+    helper.emit('close')
+
+    const errors = emit.mock.calls.filter(([event]) => event.type === 'error')
+    expect(errors).toHaveLength(1)
+  })
+
   it('stops accepting audio once the helper is gone', async () => {
     const { session } = await startSession()
     helper.exitCode = 0
