@@ -43,9 +43,12 @@ export class AppleSpeechSession {
       timeoutMs: null
     })
     this.child = child
-    // Why: a closed helper turns later writes into EPIPE, which would otherwise
-    // reach the main process as an uncaught exception mid-dictation.
+    // Why all three: spawnProcess hands back raw streams whose 'error' events
+    // the caller owns, and an unhandled one is an uncaught exception that takes
+    // the main process down mid-dictation.
     child.stdin.on('error', () => {})
+    child.stdout.on('error', () => {})
+    child.stderr.on('error', () => {})
     child.stderr.resume()
 
     let ready = false

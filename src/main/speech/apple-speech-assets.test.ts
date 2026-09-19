@@ -14,10 +14,16 @@ vi.mock('./apple-speech-helper-binary', () => ({ getAppleSpeechHelperPath }))
 
 import { installAppleSpeechAssets, readAppleSpeechAssetStatus } from './apple-speech-assets'
 
-type FakeHelper = EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: () => void }
+type FakeHelper = EventEmitter & {
+  stdin: PassThrough
+  stdout: PassThrough
+  stderr: PassThrough
+  kill: () => void
+}
 
 function createFakeHelper(): FakeHelper {
   return Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     kill: vi.fn()
