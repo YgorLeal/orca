@@ -4,7 +4,7 @@ import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
 import type { SttEventSink } from './stt-service'
-import type { SttSessionState } from './stt-session-state'
+import type { ProviderTranscriptionSession, SttSessionState } from './stt-session-state'
 import {
   clearSttIdleTeardownTimer,
   cleanupActiveSttWorkerLifecycleListeners,
@@ -175,19 +175,39 @@ async function startProviderSession(
   }
 
   state.eventSink = sink
-  if (provider === 'apple') {
-    const session = new AppleSpeechSession((event) => state.eventSink?.(event))
-    try {
-      await session.start()
-    } catch (error) {
-      state.eventSink = null
-      throw error
-    }
-    state.providerSession = session
-  } else {
-    state.providerSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
-  }
   state.activeModelId = modelId
   state.activeHotwordsFilePath = undefined
+  if (provider === 'openai') {
+    state.providerSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    sink({ type: 'ready' })
+    return
+  }
+
+  // Why registered before it starts: the helper can report a failure in the
+  // same stdout chunk as its ready line, and the stop that failure triggers
+  // has to find the session it needs to tear down.
+  const session = new AppleSpeechSession((event) => state.eventSink?.(event))
+  state.providerSession = session
+  try {
+    await session.start()
+  } catch (error) {
+    clearFailedProviderSession(state, session)
+    throw error
+  }
+  if (state.providerSession !== session) {
+    throw new Error('dictation_canceled')
+  }
   sink({ type: 'ready' })
+}
+
+function clearFailedProviderSession(
+  state: SttSessionState,
+  session: ProviderTranscriptionSession
+): void {
+  if (state.providerSession !== session) {
+    return
+  }
+  state.providerSession = null
+  state.activeModelId = null
+  state.eventSink = null
 }

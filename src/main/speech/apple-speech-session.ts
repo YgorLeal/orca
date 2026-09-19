@@ -50,6 +50,7 @@ export class AppleSpeechSession {
 
     let ready = false
     let startFailure: string | null = null
+    let reportedError = false
     let onReady: (() => void) | null = null
     const reader = createAppleSpeechEventReader((event) => {
       switch (event.type) {
@@ -65,6 +66,7 @@ export class AppleSpeechSession {
           const message = describeAppleSpeechError(event)
           startFailure ??= message
           if (ready) {
+            reportedError = true
             this.emit({ type: 'error', error: message })
           }
           onReady?.()
@@ -84,6 +86,11 @@ export class AppleSpeechSession {
       this.closed = true
       reader.flush()
       onReady?.()
+      // Why: a helper that dies mid-dictation would otherwise leave the pill
+      // listening while every later frame is dropped. The error stops the UI.
+      if (ready && !reportedError && !this.finishing) {
+        this.emit({ type: 'error', error: 'Apple Speech stopped unexpectedly.' })
+      }
     })
 
     await new Promise<void>((resolve, reject) => {
