@@ -9,7 +9,7 @@ const { runProcess, spawnProcess, getAppleSpeechHelperPath } = vi.hoisted(() => 
     () => '/Applications/Orca.app/Contents/MacOS/orca-speech-transcriber'
   )
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess, spawnProcess }))
+vi.mock('@orca/process-host', () => ({ runProcess, spawnProcess }))
 vi.mock('./apple-speech-helper-binary', () => ({ getAppleSpeechHelperPath }))
 
 import { installAppleSpeechAssets, readAppleSpeechAssetStatus } from './apple-speech-assets'

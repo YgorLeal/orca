@@ -1,4 +1,5 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { getAppleSpeechHelperPath } from './apple-speech-helper-binary'
 import { createAppleSpeechEventReader, describeAppleSpeechError } from './apple-speech-events'
 import { resampleToRate } from './stt-audio-resample'
@@ -26,7 +27,7 @@ export type AppleSpeechEmit = (
  * `finish` only waits for the helper to drain.
  */
 export class AppleSpeechSession {
-  private child: ReturnType<typeof spawnProcess> | null = null
+  private child: PipedChildProcess | null = null
   private closed = false
   private finishing: Promise<string> | null = null
 

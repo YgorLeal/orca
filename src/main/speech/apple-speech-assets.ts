@@ -1,4 +1,4 @@
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { getAppleSpeechHelperPath } from './apple-speech-helper-binary'
 import {
   createAppleSpeechEventReader,

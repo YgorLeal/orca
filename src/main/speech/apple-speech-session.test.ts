@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnProcess } = vi.hoisted(() => ({ spawnProcess: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess }))
+vi.mock('@orca/process-host', () => ({ spawnProcess }))
 vi.mock('./apple-speech-helper-binary', () => ({
   getAppleSpeechHelperPath: () => '/Applications/Orca.app/Contents/MacOS/orca-speech-transcriber'
 }))
